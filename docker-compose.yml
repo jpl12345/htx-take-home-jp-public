@@ -1,0 +1,78 @@
+services:
+  db:
+    image: postgres:17
+    container_name: postgres_audio
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: adminpassword
+      POSTGRES_DB: audio_db
+      TZ: Asia/Singapore  
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql  # Initialize database with seed data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d audio_db"]
+      interval: 1s
+      timeout: 1s
+      retries: 500
+
+  backend:
+    build: ./backend
+    container_name: fastapi_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://admin:adminpassword@db:5432/audio_db"
+      SECRET_KEY: "YOUR_SECRET_KEY"  
+      TZ: Asia/Singapore
+    ports:
+      - "8080:8080"
+    networks:
+      - app_network
+
+  frontend:
+    build:
+      context: ./frontend/htx-nextjs
+      dockerfile: Dockerfile
+    container_name: nextjs_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Singapore
+    networks:
+      - app_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    depends_on:
+      - db
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com 
+      PGADMIN_DEFAULT_PASSWORD: adminpassword 
+      TZ: Asia/Singapore
+    ports:
+      - "5050:80" 
+    networks:
+      - app_network
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  app_network:
